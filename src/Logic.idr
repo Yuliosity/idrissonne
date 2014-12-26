@@ -3,6 +3,8 @@ module Logic
 import Data.SortedMap
 import Rotate
 
+import Data.Bits
+
 ||| A player
 record Player : Type where
     MkPlayer : (name : String)
@@ -17,16 +19,40 @@ instance Rotate Edge where
     rotate Bottom = Left
     rotate Left = Top
     cyclic e = ?edgeCyclic                        
-                                                                        
+
+data BEdge = BE Bits8
+
+top : BEdge
+top = BE 2
+
+right : BEdge
+right = BE 8
+
+bottom : BEdge
+bottom = BE 32
+
+left : BEdge
+left = BE 128
+
+instance Rotate BEdge where
+    rotate (BE b) = BE ((b `prim__lshrB8` 2) `prim__orB8` (b `prim__shlB8` 6))
+    cyclic (BE b) = ?improvable
+    
 data CityMark = N | Pennant
 
 ||| A region of the tile where a follower can be placed.
 %elim data Region
     = Cloister
-    | City CityMark (List Edge)
-    | Farm (List Edge)
-    | Road (List Edge)
-    
+    | City CityMark (List BEdge)
+    | Farm (List BEdge)
+    | Road (List BEdge)
+
+borders : Region -> List BEdge
+borders Cloister = []
+borders (City _ b) = b
+borders (Farm b) = b
+borders (Road b) = b
+
 instance Rotate Region where
     rotate Cloister = Cloister
     rotate (Road borders) = Road (rotate borders)
@@ -37,21 +63,24 @@ instance Rotate Region where
     cyclic (City m borders) = rewrite sym (cyclic borders) in refl
     cyclic (Farm borders) = rewrite sym (cyclic borders) in refl
 
---fullBorder : List Region -> Bool
---f
-
-||| An arbitrary point
-Point : Type
-Point = Vec Float
+fullBorder : List BEdge -> Bool
+fullBorder rs = go 0 rs where
+    go : Bits8 -> List BEdge -> Bool
+    go acc [] = acc == 255
+    go acc ((BE r) :: rs) =
+        if 0 == (acc `prim__andB8` r)
+            then go (acc `prim__orB8` r) rs
+            else False
 
 ||| A tile data type which encapsulates the logic tile.
 record Tile : Type where
-    MkTile : (regions : List (Point, Region))
+    MkTile : (regions : List Region)
+          -> (p: so (fullBorder $ concatMap borders regions))
           -> Tile
 
 instance Rotate Tile where
-    rotate (MkTile regions) = MkTile (rotate regions)
-    cyclic (MkTile regions) = rewrite sym (cyclic regions) in refl
+    rotate (MkTile regions p) = ?mkr --MkTile (rotate regions)
+    cyclic (MkTile regions p) = ?cr --rewrite sym (cyclic regions) in refl
     
 
 
