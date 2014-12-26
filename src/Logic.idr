@@ -1,6 +1,7 @@
 module Logic
 
 import Data.SortedMap
+import Rotate
 
 ||| A player
 record Player : Type where
@@ -9,7 +10,14 @@ record Player : Type where
 
 %elim
 data Edge = Top | Right | Bottom | Left
-                        
+
+instance Rotate Edge where
+    rotate Top = Right
+    rotate Right = Bottom
+    rotate Bottom = Left
+    rotate Left = Top
+    cyclic e = ?edgeCyclic                        
+                                                                        
 data CityMark = N | Pennant
 
 ||| A region of the tile where a follower can be placed.
@@ -18,38 +26,7 @@ data CityMark = N | Pennant
     | City CityMark (List Edge)
     | Farm (List Edge)
     | Road (List Edge)
-
-data CellPoint : Type where
-    CP : (Float, Float) -> CellPoint
-
-||| A tile data type which encapsulates the logic tile.
-record Tile : Type where
-    MkTile : (regions : List (CellPoint, Region))
-          -> Tile
-
-||| A class of types which can be rotated by 90 degrees clockwise.
-class Rotate a where
-    rotate : a -> a
-    cyclic : (e : a) -> rotate (rotate (rotate (rotate e))) = e
     
-instance Rotate Edge where
-    rotate Top = Right
-    rotate Right = Bottom
-    rotate Bottom = Left
-    rotate Left = Top
-    cyclic e = ?edgeCyclic
-    
-instance Rotate CellPoint where
-    rotate (CP (x, y)) = CP (y, -x)
-    cyclic (CP (x, y)) = ?cpCyclic --Can't prove
-
-instance Rotate a => Rotate (List a) where
-    rotate Nil = Nil
-    rotate (x :: xs) = rotate x :: rotate xs
-    cyclic Nil = refl
-    cyclic (x :: xs) with (cyclic xs)
-        | ih = rewrite sym (cyclic x) in cong ih    
-            
 instance Rotate Region where
     rotate Cloister = Cloister
     rotate (Road borders) = Road (rotate borders)
@@ -60,30 +37,27 @@ instance Rotate Region where
     cyclic (City m borders) = rewrite sym (cyclic borders) in refl
     cyclic (Farm borders) = rewrite sym (cyclic borders) in refl
 
-instance (Rotate a, Rotate b) => Rotate (a, b) where
-    rotate (a, b) = (rotate a, rotate b)
-    cyclic (a, b) = ?pairCyclic
+--fullBorder : List Region -> Bool
+--f
+
+||| An arbitrary point
+Point : Type
+Point = Vec Float
+
+||| A tile data type which encapsulates the logic tile.
+record Tile : Type where
+    MkTile : (regions : List (Point, Region))
+          -> Tile
 
 instance Rotate Tile where
     rotate (MkTile regions) = MkTile (rotate regions)
     cyclic (MkTile regions) = rewrite sym (cyclic regions) in refl
     
-data DepVect : Nat -> Type -> Type where
-    Nil  : DepVect 0 a
-    (::) : (a ** b) -> DepVect n a -> DepVect (S n) a
 
-v : Player
-v = MkPlayer "Vasya"
-
-p : Player
-p = MkPlayer "Petya"
 
 ||| A data type for followers.
 data Follower : Player -> Type where
     MkFollower : (p : Player) -> Follower p
-
-test : DepVect 2 Player
-test = (v ** MkFollower v) :: (p ** MkFollower p) :: Nil
 
 ||| A cell of the field.
 Cell : Type
@@ -101,23 +75,37 @@ record LogicState : Type where
       -> LogicState
 
 ---------- Proofs ----------
-Logic.pairCyclic = proof
-  intros
-  rewrite sym (cyclic {e = a})
-  rewrite sym (cyclic {e = b})
-  trivial
-
-
 
 Logic.edgeCyclic = proof
-  intros
+  intro
   case e
-  compute
   trivial
-  compute
   trivial
-  compute
   trivial
-  compute
   trivial
 
+----------------------------
+
+member : Ord k => k -> SortedMap k v -> Bool
+member k m = case lookup k m of
+    Nothing => False
+    Just _  => True
+
+||| Check if a tile can be placed on the field cell.
+-- TODO: refactor
+private edgeOffset : Edge -> ((Int, Int), Edge)
+edgeOffset Top    = (( 0, -1), Bottom)
+edgeOffset Right  = (( 1,  0), Left)
+edgeOffset Bottom = (( 0,  1), Top)
+edgeOffset Left   = ((-1,  0), Right)
+
+matchTiles : Cell -> Tile -> Field -> Bool
+matchTiles c t f = ?mt
+
+data CanBePlaced : Cell -> Tile -> Field -> Type where
+    canBePlaced : (c : Cell) -> (t : Tile) -> (f : Field) -> so (not $ member c (tiles f) && matchTiles c t f) -> CanBePlaced c t f
+
+||| Place a new tile in the empty cell of the field.
+placeTile : (c : Cell) -> (t : Tile) -> (f : Field) -> CanBePlaced c t f -> Field
+placeTile cell tile field p =
+    record {tiles = insert cell tile (tiles field)} field
