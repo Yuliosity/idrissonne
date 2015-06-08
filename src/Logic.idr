@@ -1,14 +1,15 @@
 module Logic
 
+import Data.Bits
+import Data.So
 import Data.SortedMap
+
 import Rotate
 
-import Data.Bits
-
 ||| A player
-record Player : Type where
-    MkPlayer : (name : String)
-            -> Player
+record Player where
+    constructor MkPlayer
+    name : String
 
 %elim
 data Edge = Top | Right | Bottom | Left
@@ -20,23 +21,24 @@ instance Rotate Edge where
     rotate Left = Top
     cyclic e = ?edgeCyclic                        
 
+||| Bit mask representing the edge or its half.
 data BEdge = BE Bits8
 
 top : BEdge
-top = BE 2
+top = BE 3
 
 right : BEdge
-right = BE 8
+right = BE 12
 
 bottom : BEdge
-bottom = BE 32
+bottom = BE 48
 
 left : BEdge
-left = BE 128
+left = BE 192
 
 instance Rotate BEdge where
     rotate (BE b) = BE ((b `prim__lshrB8` 2) `prim__orB8` (b `prim__shlB8` 6))
-    cyclic (BE b) = ?improvable
+    cyclic (BE b) = believe_me b
     
 data CityMark = N | Pennant
 
@@ -58,10 +60,10 @@ instance Rotate Region where
     rotate (Road borders) = Road (rotate borders)
     rotate (City m borders) = City m (rotate borders)
     rotate (Farm borders) = Farm (rotate borders)
-    cyclic Cloister = refl
-    cyclic (Road borders) = rewrite sym (cyclic borders) in refl
-    cyclic (City m borders) = rewrite sym (cyclic borders) in refl
-    cyclic (Farm borders) = rewrite sym (cyclic borders) in refl
+    cyclic Cloister = Refl
+    cyclic (Road borders) = rewrite sym (cyclic borders) in Refl
+    cyclic (City m borders) = rewrite sym (cyclic borders) in Refl
+    cyclic (Farm borders) = rewrite sym (cyclic borders) in Refl
 
 fullBorder : List BEdge -> Bool
 fullBorder rs = go 0 rs where
@@ -72,36 +74,42 @@ fullBorder rs = go 0 rs where
             then go (acc `prim__orB8` r) rs
             else False
 
+rotateFullBorder : (xs : List BEdge) -> So (fullBorder xs) -> So (fullBorder (rotate xs))
+rotateFullBorder xs = ?rfb
+
+rotateRegions : (xs : List Region) -> So (fullBorder $ concatMap borders xs) -> So (fullBorder $ concatMap borders (map rotate xs))
+rotateRegions xs = ?rr
+
 ||| A tile data type which encapsulates the logic tile.
-record Tile : Type where
-    MkTile : (regions : List Region)
-          -> (p: so (fullBorder $ concatMap borders regions))
-          -> Tile
+record Tile where
+    constructor MkTile
+    regions : List Region
+    isFullBorder : So (fullBorder $ concatMap borders regions)
 
 instance Rotate Tile where
-    rotate (MkTile regions p) = ?mkr --MkTile (rotate regions)
-    cyclic (MkTile regions p) = ?cr --rewrite sym (cyclic regions) in refl
+    rotate (MkTile rs p) = MkTile (rotate rs) ?mkr
+    cyclic (MkTile rs p) = ?ct
     
-
-
 ||| A data type for followers.
-data Follower : Player -> Type where
-    MkFollower : (p : Player) -> Follower p
+record Follower where
+    constructor MkFollower
+    owner : Player
 
 ||| A cell of the field.
 Cell : Type
 Cell = (Int, Int) 
    
 ||| A field of tiles.
-record Field : Type where
-    MkField : (tiles : SortedMap Cell Tile)
-           -> Field
+record Field where
+    constructor MkField
+    tiles : SortedMap Cell Tile
+    --
 
 ||| A type for holding the game state.
-record LogicState : Type where
-    LS : (field : Field)
-      -> (box : List Tile)
-      -> LogicState
+record LogicState where
+    constructor LS
+    field : Field
+    box : List Tile
 
 ---------- Proofs ----------
 
@@ -128,11 +136,14 @@ edgeOffset Right  = (( 1,  0), Left)
 edgeOffset Bottom = (( 0,  1), Top)
 edgeOffset Left   = ((-1,  0), Right)
 
+--private binEdgeOffset : BEdge -> ((Int, Int), Edge)
+--binEdgeOffset = 
+
 matchTiles : Cell -> Tile -> Field -> Bool
 matchTiles c t f = ?mt
 
 data CanBePlaced : Cell -> Tile -> Field -> Type where
-    canBePlaced : (c : Cell) -> (t : Tile) -> (f : Field) -> so (not $ member c (tiles f) && matchTiles c t f) -> CanBePlaced c t f
+    canBePlaced : (c : Cell) -> (t : Tile) -> (f : Field) -> So (not $ member c (tiles f) && matchTiles c t f) -> CanBePlaced c t f
 
 ||| Place a new tile in the empty cell of the field.
 placeTile : (c : Cell) -> (t : Tile) -> (f : Field) -> CanBePlaced c t f -> Field

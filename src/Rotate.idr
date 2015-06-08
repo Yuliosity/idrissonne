@@ -11,7 +11,7 @@ class Rotate a where
 instance Rotate a => Rotate (List a) where
     rotate Nil = Nil
     rotate (x :: xs) = rotate x :: rotate xs
-    cyclic Nil = refl
+    cyclic Nil = Refl
     cyclic (x :: xs) with (cyclic xs)
         | ih = rewrite sym (cyclic x) in cong ih 
         
@@ -19,15 +19,29 @@ instance (Rotate a, Rotate b) => Rotate (a, b) where
     rotate (a, b) = (rotate a, rotate b)
     cyclic (a, b) = ?pairCyclic
 
-record Vec : Type -> Type where
-    V : Num a => (px : a) -> (py : a) -> Vec a
+record Vec a where
+    constructor V
+    px : a 
+    py : a
             
-instance (Num a) => Rotate (Vec a) where
-    rotate (V a b) = V b (-a)
-    cyclic (V a b) = ?improvable
+instance (Neg a) => Rotate (Vec a) where
+    rotate (V a b) = V b (negate a)
+    cyclic (V a b) = ?negCyclic
+
+doubleNegateRefl : (Neg t) => (x : t) -> negate (negate x) = x
+doubleNegateRefl x = believe_me x
+
+---------- Proofs ----------
 
 pairCyclic = proof
   intros
   rewrite sym (cyclic a)
   rewrite sym (cyclic b)
   trivial
+
+Rotate.negCyclic = proof
+  intros
+  rewrite sym (doubleNegateRefl a)
+  rewrite sym (doubleNegateRefl b)
+  trivial
+
