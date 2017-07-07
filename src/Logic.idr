@@ -11,15 +11,17 @@ record Player where
     constructor MkPlayer
     name : String
 
-%elim
 data Edge = Top | Right | Bottom | Left
 
-instance Rotate Edge where
+Rotate Edge where
     rotate Top = Right
     rotate Right = Bottom
     rotate Bottom = Left
     rotate Left = Top
-    cyclic e = ?edgeCyclic                        
+    cyclic Top = Refl
+    cyclic Right = Refl
+    cyclic Bottom = Refl
+    cyclic Left = Refl
 
 ||| Bit mask representing the edge or its half.
 data BEdge = BE Bits8
@@ -36,14 +38,14 @@ bottom = BE 48
 left : BEdge
 left = BE 192
 
-instance Rotate BEdge where
+Rotate BEdge where
     rotate (BE b) = BE ((b `prim__lshrB8` 2) `prim__orB8` (b `prim__shlB8` 6))
     cyclic (BE b) = believe_me b
-    
+
 data CityMark = N | Pennant
 
 ||| A region of the tile where a follower can be placed.
-%elim data Region
+data Region
     = Cloister
     | City CityMark (List BEdge)
     | Farm (List BEdge)
@@ -55,7 +57,7 @@ borders (City _ b) = b
 borders (Farm b) = b
 borders (Road b) = b
 
-instance Rotate Region where
+Rotate Region where
     rotate Cloister = Cloister
     rotate (Road borders) = Road (rotate borders)
     rotate (City m borders) = City m (rotate borders)
@@ -77,19 +79,20 @@ fullBorder rs = go 0 rs where
 rotateFullBorder : (xs : List BEdge) -> So (fullBorder xs) -> So (fullBorder (rotate xs))
 rotateFullBorder xs = ?rfb
 
-rotateRegions : (xs : List Region) -> So (fullBorder $ concatMap borders xs) -> So (fullBorder $ concatMap borders (map rotate xs))
+rotateRegions : (xs : List Region) -> So (fullBorder $ concatMap Logic.borders xs) ->
+                So (fullBorder $ concatMap Logic.borders (map rotate xs))
 rotateRegions xs = ?rr
 
 ||| A tile data type which encapsulates the logic tile.
 record Tile where
     constructor MkTile
     regions : List Region
-    isFullBorder : So (fullBorder $ concatMap borders regions)
+    isFullBorder : So (fullBorder $ concatMap Logic.borders regions)
 
-instance Rotate Tile where
+Rotate Tile where
     rotate (MkTile rs p) = MkTile (rotate rs) ?mkr
     cyclic (MkTile rs p) = ?ct
-    
+
 ||| A data type for followers.
 record Follower where
     constructor MkFollower
@@ -97,8 +100,8 @@ record Follower where
 
 ||| A cell of the field.
 Cell : Type
-Cell = (Int, Int) 
-   
+Cell = (Int, Int)
+
 ||| A field of tiles.
 record Field where
     constructor MkField
@@ -110,18 +113,6 @@ record LogicState where
     constructor LS
     field : Field
     box : List Tile
-
----------- Proofs ----------
-
-Logic.edgeCyclic = proof
-  intro
-  case e
-  trivial
-  trivial
-  trivial
-  trivial
-
-----------------------------
 
 member : Ord k => k -> SortedMap k v -> Bool
 member k m = case lookup k m of
@@ -137,13 +128,13 @@ edgeOffset Bottom = (( 0,  1), Top)
 edgeOffset Left   = ((-1,  0), Right)
 
 --private binEdgeOffset : BEdge -> ((Int, Int), Edge)
---binEdgeOffset = 
+--binEdgeOffset =
 
 matchTiles : Cell -> Tile -> Field -> Bool
 matchTiles c t f = ?mt
 
 data CanBePlaced : Cell -> Tile -> Field -> Type where
-    canBePlaced : (c : Cell) -> (t : Tile) -> (f : Field) -> So (not $ member c (tiles f) && matchTiles c t f) -> CanBePlaced c t f
+    CBP : (c : Cell) -> (t : Tile) -> (f : Field) -> So (not $ member c (tiles f) && matchTiles c t f) -> CanBePlaced c t f
 
 ||| Place a new tile in the empty cell of the field.
 placeTile : (c : Cell) -> (t : Tile) -> (f : Field) -> CanBePlaced c t f -> Field
